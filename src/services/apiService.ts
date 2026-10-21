@@ -410,8 +410,9 @@ export function adminCriarEmpresa(dados: NovaEmpresaAdminPayload): Promise<{ id:
   return requisitarAdmin('/empresas', { method: 'POST', body: JSON.stringify(dados) });
 }
 
-export function adminDefinirPlano(empresaId: string, planoAtual: EmpresaAdmin['planoAtual']): Promise<void> {
-  return requisitarAdmin(`/empresas/${empresaId}/plano`, { method: 'PUT', body: JSON.stringify({ planoAtual }) });
+/** `diasCarencia`: dias de uso do plano sem cobrança; sem ele, vale a regra padrão (cortesia sem prazo). */
+export function adminDefinirPlano(empresaId: string, planoAtual: EmpresaAdmin['planoAtual'], diasCarencia?: number): Promise<void> {
+  return requisitarAdmin(`/empresas/${empresaId}/plano`, { method: 'PUT', body: JSON.stringify({ planoAtual, diasCarencia }) });
 }
 
 export function adminDefinirEmpresaAtiva(empresaId: string, ativo: boolean): Promise<void> {

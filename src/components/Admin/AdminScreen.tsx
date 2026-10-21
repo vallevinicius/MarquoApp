@@ -23,7 +23,7 @@ import type { EmpresaAdmin, LojaAdmin, PlanoSaaS } from '@/types';
 import { AdminReceita } from './AdminReceita';
 import { AdminResumo, emTrial } from './AdminResumo';
 import { EmpresaItem, type AcoesEmpresa } from './EmpresaItem';
-import { ModalExcluir, ModalSenhaGerada } from './AdminModais';
+import { ModalExcluir, ModalPlano, ModalSenhaGerada } from './AdminModais';
 import { NovaEmpresaModal } from './NovaEmpresaModal';
 import { SegurancaModal } from './SegurancaModal';
 
@@ -50,6 +50,7 @@ export function AdminScreen() {
   const [doisFatores, setDoisFatores] = useState<boolean | null>(null);
   const [excluirEmpresa, setExcluirEmpresa] = useState<EmpresaAdmin | null>(null);
   const [excluirLoja, setExcluirLoja] = useState<{ empresa: EmpresaAdmin; loja: LojaAdmin } | null>(null);
+  const [trocandoPlano, setTrocandoPlano] = useState<{ empresa: EmpresaAdmin; plano: PlanoSaaS } | null>(null);
   const [senhaGerada, setSenhaGerada] = useState<{ nome: string; senha: string } | null>(null);
 
   const sair = useCallback(() => {
@@ -101,7 +102,7 @@ export function AdminScreen() {
   }
 
   const acoes: AcoesEmpresa = {
-    onTrocarPlano: (empresa, novo) => executar(() => adminDefinirPlano(empresa.id, novo), `Plano alterado para ${novo}.`),
+    onTrocarPlano: (empresa, novo) => setTrocandoPlano({ empresa, plano: novo }),
     onAlternarEmpresa: async (empresa) => {
       const suspender = empresa.ativo;
       const ok = await confirmar({
@@ -259,6 +260,22 @@ export function AdminScreen() {
         />
       )}
 
+      {trocandoPlano && (
+        <ModalPlano
+          empresaNome={trocandoPlano.empresa.nome}
+          planoAtual={trocandoPlano.empresa.planoAtual}
+          novoPlano={trocandoPlano.plano}
+          onCancelar={() => setTrocandoPlano(null)}
+          onConfirmar={async (dias) => {
+            const { empresa, plano } = trocandoPlano;
+            setTrocandoPlano(null);
+            await executar(
+              () => adminDefinirPlano(empresa.id, plano, dias),
+              dias ? `Plano ${plano} liberado por ${dias} dia(s).` : `Plano alterado para ${plano}.`,
+            );
+          }}
+        />
+      )}
       {senhaGerada && <ModalSenhaGerada usuarioNome={senhaGerada.nome} senha={senhaGerada.senha} onFechar={() => setSenhaGerada(null)} />}
     </div>
   );

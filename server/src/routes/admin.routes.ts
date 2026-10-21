@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { assinarTokenAdmin, requirePlatformAdmin } from '../middleware/auth.js';
-import { calcularTrialExpiraEm, PRECOS_MENSAIS } from '../config/planos.js';
+import { calcularTrialExpiraEm, MAX_DIAS_CARENCIA, PRECOS_MENSAIS } from '../config/planos.js';
 import { cpfValido, normalizarCnpj } from '../lib/documentos.js';
 import { mensagemDeValidacao, senhaForte } from '../lib/senha.js';
 import { gerarSegredoTotp, urlOtpauth, verificarTotp } from '../lib/totp.js';
@@ -440,19 +440,24 @@ adminRouter.delete('/lojas/:id', async (req, res) => {
 
 const planoSchema = z.object({
   planoAtual: z.enum(['FREE', 'STARTER', 'PRO', 'ENTERPRISE']),
+  /** Carência: dias de uso do plano escolhido sem cobrança, contados a partir de hoje.
+   * Ao fim, a empresa cai na tela de assinar (mesmo mecanismo do teste grátis).
+   * Omitido: FREE ganha o teste padrão e os planos pagos ficam sem prazo (cortesia). */
+  diasCarencia: z.number().int().min(1).max(MAX_DIAS_CARENCIA).optional(),
 });
 
 adminRouter.put('/empresas/:id/plano', async (req, res) => {
   const parse = planoSchema.safeParse(req.body);
   if (!parse.success) {
-    return res.status(400).json({ erro: 'Plano inválido.' });
+    return res.status(400).json({ erro: `Plano ou carência inválidos (a carência vai de 1 a ${MAX_DIAS_CARENCIA} dias).` });
   }
 
   const empresa = await prisma.empresa.findUnique({ where: { id: req.params.id } });
   if (!empresa) return res.status(404).json({ erro: 'Empresa não encontrada.' });
 
-  const novoPlano = parse.data.planoAtual;
-  const trialExpiraEm = novoPlano === 'FREE' ? calcularTrialExpiraEm() : null;
+  const { planoAtual: novoPlano, diasCarencia } = parse.data;
+  const trialExpiraEm =
+    diasCarencia !== undefined ? calcularTrialExpiraEm(diasCarencia) : novoPlano === 'FREE' ? calcularTrialExpiraEm() : null;
 
   const atualizado = await prisma.empresa.update({
     where: { id: empresa.id },

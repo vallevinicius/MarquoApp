@@ -118,4 +118,59 @@ describe('verificação em duas etapas do admin', () => {
     const loja = await entrar(a.dono.email);
     expect((await request(app).get('/api/admin/receita').set(loja.auth)).status).toBe(403);
   });
+
+  describe('plano com carência', () => {
+    const dias = (d: Date | null) => Math.round(((d?.getTime() ?? 0) - Date.now()) / 86_400_000);
+
+    it('troca o plano e libera por N dias de carência', async () => {
+      const { empresa } = await criarEmpresa({ plano: 'FREE' });
+      const { auth } = await loginAdmin();
+      const r = await request(app).put(`/api/admin/empresas/${empresa.id}/plano`).set(auth).send({ planoAtual: 'PRO', diasCarencia: 60 });
+      expect(r.status).toBe(200);
+      const salvo = await prisma.empresa.findUniqueOrThrow({ where: { id: empresa.id } });
+      expect(salvo.planoAtual).toBe('PRO');
+      expect(dias(salvo.trialExpiraEm)).toBe(60);
+    });
+
+    it('a empresa em carência vencida cai na tela de assinar e a vigente entra normal', async () => {
+      const { dono: vencida } = await criarEmpresa({ plano: 'PRO', trialExpiraEm: new Date(Date.now() - 86_400_000) });
+      const { dono: vigente } = await criarEmpresa({ plano: 'PRO', trialExpiraEm: new Date(Date.now() + 30 * 86_400_000) });
+      const a = await entrar(vencida.email);
+      const b = await entrar(vigente.email);
+      expect((await request(app).get('/api/produtos').set(a.auth)).status).toBe(402);
+      expect((await request(app).get('/api/produtos').set(b.auth)).status).toBe(200);
+    });
+
+    it('sem diasCarencia mantém a regra antiga: plano pago sem prazo, FREE com teste padrão', async () => {
+      const { empresa } = await criarEmpresa({ plano: 'PRO', trialExpiraEm: new Date(Date.now() + 5 * 86_400_000) });
+      const { auth } = await loginAdmin();
+      await request(app).put(`/api/admin/empresas/${empresa.id}/plano`).set(auth).send({ planoAtual: 'STARTER' });
+      expect((await prisma.empresa.findUniqueOrThrow({ where: { id: empresa.id } })).trialExpiraEm).toBeNull();
+      await request(app).put(`/api/admin/empresas/${empresa.id}/plano`).set(auth).send({ planoAtual: 'FREE' });
+      expect(dias((await prisma.empresa.findUniqueOrThrow({ where: { id: empresa.id } })).trialExpiraEm)).toBe(14);
+    });
+
+    it.each([0, -5, 1.5, 731, '30', null])('recusa carência inválida (%s) e não altera a empresa', async (valor) => {
+      const { empresa } = await criarEmpresa({ plano: 'STARTER' });
+      const { auth } = await loginAdmin();
+      const r = await request(app).put(`/api/admin/empresas/${empresa.id}/plano`).set(auth).send({ planoAtual: 'PRO', diasCarencia: valor });
+      expect(r.status).toBe(400);
+      expect((await prisma.empresa.findUniqueOrThrow({ where: { id: empresa.id } })).planoAtual).toBe('STARTER');
+    });
+
+    it('404 para empresa inexistente', async () => {
+      const { auth } = await loginAdmin();
+      const r = await request(app).put('/api/admin/empresas/nao-existe/plano').set(auth).send({ planoAtual: 'PRO', diasCarencia: 30 });
+      expect(r.status).toBe(404);
+    });
+
+    it('só o admin da plataforma muda o plano: sem token e com login de loja são recusados', async () => {
+      const { empresa, dono } = await criarEmpresa({ plano: 'STARTER' });
+      const loja = await entrar(dono.email);
+      const corpo = { planoAtual: 'ENTERPRISE', diasCarencia: 365 };
+      expect((await request(app).put(`/api/admin/empresas/${empresa.id}/plano`).send(corpo)).status).toBe(401);
+      expect((await request(app).put(`/api/admin/empresas/${empresa.id}/plano`).set(loja.auth).send(corpo)).status).toBe(403);
+      expect((await prisma.empresa.findUniqueOrThrow({ where: { id: empresa.id } })).planoAtual).toBe('STARTER');
+    });
+  });
 });

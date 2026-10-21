@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cnpjValido, cpfValido, normalizarCnpj } from '../src/lib/documentos.js';
 import { codigoAtual, gerarSegredoTotp, verificarTotp } from '../src/lib/totp.js';
 import { senhaForte } from '../src/lib/senha.js';
-import { motivoAcessoExpirado } from '../src/config/planos.js';
+import { calcularTrialExpiraEm, DIAS_TRIAL, motivoAcessoExpirado } from '../src/config/planos.js';
 
 describe('documentos', () => {
   it('valida CNPJ pelos dígitos verificadores e normaliza a máscara', () => {
@@ -63,5 +63,27 @@ describe('acesso por assinatura', () => {
   it('assinatura cancelada vale até o fim do período pago', () => {
     expect(motivoAcessoExpirado({ trialExpiraEm: null, assinaturaStatus: 'CANCELADA', acessoAte: amanha }, agora)).toBeNull();
     expect(motivoAcessoExpirado({ trialExpiraEm: null, assinaturaStatus: 'CANCELADA', acessoAte: ontem }, agora)).toBe('ASSINATURA');
+  });
+});
+
+describe('calcularTrialExpiraEm', () => {
+  const base = new Date('2026-01-10T12:00:00Z');
+
+  it('usa os dias de teste padrão quando nenhum prazo é informado', () => {
+    const fim = calcularTrialExpiraEm(undefined, base);
+    expect(Math.round((fim.getTime() - base.getTime()) / 86_400_000)).toBe(DIAS_TRIAL);
+  });
+
+  it('soma os dias de carência informados sem alterar a data de origem', () => {
+    const fim = calcularTrialExpiraEm(60, base);
+    expect(Math.round((fim.getTime() - base.getTime()) / 86_400_000)).toBe(60);
+    expect(base.toISOString()).toBe('2026-01-10T12:00:00.000Z');
+  });
+
+  it('a carência vencida bloqueia o acesso e a vigente não', () => {
+    const agora = new Date('2026-03-01T12:00:00Z');
+    const base = { assinaturaStatus: 'NENHUMA', acessoAte: null };
+    expect(motivoAcessoExpirado({ ...base, trialExpiraEm: calcularTrialExpiraEm(30, new Date('2026-01-01T12:00:00Z')) }, agora)).toBe('TRIAL');
+    expect(motivoAcessoExpirado({ ...base, trialExpiraEm: calcularTrialExpiraEm(90, new Date('2026-01-01T12:00:00Z')) }, agora)).toBeNull();
   });
 });
