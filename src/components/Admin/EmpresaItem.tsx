@@ -166,8 +166,8 @@ export function EmpresaItem({ empresa, aberta, onAlternar, acoes }: {
               {empresa.assinatura.status === 'PAUSADA' && <Selo tom="erro">Pagamento pendente</Selo>}
               {empresa.trialExpiraEm && empresa.assinatura.status !== 'ATIVA' && (
                 trialAtivo
-                  ? <Selo tom="aviso">Teste: {diasRestantes(empresa.trialExpiraEm)}d</Selo>
-                  : <Selo tom="erro">Teste expirado</Selo>
+                  ? <Selo tom="aviso">Prazo: {diasRestantes(empresa.trialExpiraEm)}d</Selo>
+                  : <Selo tom="erro">Prazo expirado</Selo>
               )}
             </span>
             <span className="mt-0.5 block text-xs text-ink-500">
@@ -186,6 +186,7 @@ export function EmpresaItem({ empresa, aberta, onAlternar, acoes }: {
         </select>
 
         <div className="flex gap-1">
+          <Botao onClick={() => acoes.onTrocarPlano(empresa, empresa.planoAtual)}>Carência</Botao>
           <Botao onClick={() => acoes.onAlternarEmpresa(empresa)}>{empresa.ativo ? 'Suspender' : 'Reativar'}</Botao>
           <Botao perigo onClick={() => acoes.onExcluirEmpresa(empresa)}>Excluir</Botao>
         </div>

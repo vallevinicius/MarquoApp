@@ -38,9 +38,12 @@ export const LIMITES_POR_PLANO: Record<PlanoSaaS, LimitesPlano> = {
   },
 };
 
-export function calcularTrialExpiraEm(): Date {
-  const data = new Date();
-  data.setDate(data.getDate() + DIAS_TRIAL);
+/** Máximo de dias de carência que o admin pode conceder de uma vez (2 anos). */
+export const MAX_DIAS_CARENCIA = 730;
+
+export function calcularTrialExpiraEm(dias = DIAS_TRIAL, desde = new Date()): Date {
+  const data = new Date(desde);
+  data.setDate(data.getDate() + dias);
   return data;
 }
 
